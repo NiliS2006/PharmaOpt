@@ -1,7 +1,8 @@
+import datetime as dt
 from typing import List
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from . import db, engine, llm, invoice
 
 db.init()
@@ -11,7 +12,12 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 class Chat(BaseModel): question: str
 class Sim(BaseModel): medicine: str; buy_qty: int = 0; delay_days: int = 0
 class Text(BaseModel): text: str
-class Row(BaseModel): medicine: str; batch: str; qty: int; expiry: str; matched: bool = True
+class Row(BaseModel):
+    medicine: str
+    batch: str
+    qty: int = Field(gt=0)
+    expiry: dt.date
+    matched: bool = True
 
 @app.get("/api/health")
 def health(): return {"ok": True}
@@ -37,4 +43,14 @@ async def inv_upload(file: UploadFile = File(...)):
     return invoice.parse(invoice.read_text(await file.read(), file.filename or ""), db.load()[0])
 @app.post("/api/invoice/confirm")
 def inv_confirm(rows: List[Row]):
-    db.add_batches([r.model_dump(exclude={"matched"}) for r in rows if r.matched]); return {"added": len(rows)}
+    accepted = []
+    for row in rows:
+        if row.matched:
+            accepted.append({
+                "medicine": row.medicine,
+                "batch": row.batch,
+                "qty": row.qty,
+                "expiry": row.expiry.isoformat(),
+            })
+    db.add_batches(accepted)
+    return {"added": len(accepted)}

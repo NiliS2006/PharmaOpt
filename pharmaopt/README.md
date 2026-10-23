@@ -1,5 +1,5 @@
 # PharmaOpt
-**AI-powered pharmacy inventory intelligence: it tells you what to buy, how much, and when.**
+**Pharmacy inventory decision support: see what to buy, how much, and when.**
 
 Most inventory tools show what you have. PharmaOpt shows what to *do next* and why.
 
@@ -8,7 +8,7 @@ Most inventory tools show what you have. PharmaOpt shows what to *do next* and w
 - **Budget-aware purchase plan** with a plain-language reason for each order
 - **What-if simulator:** compare not buying, buying now, or buying later
 - **Ask PharmaOpt:** natural-language assistant. Numbers come only from the deterministic engine; the LLM (Qwen2.5-7B via Ollama) only explains them
-- Planned: invoice-to-inventory OCR, PostgreSQL storage, stronger demand models
+- Invoice text/OCR review with date and quantity validation before stock is added
 
 ## Architecture
 React UI -> FastAPI -> `engine.py` (forecast / risk / optimizer / simulator) <- `llm.py` (question -> verified facts -> explanation)
@@ -31,15 +31,16 @@ Backend: Render or Railway using `pharmaopt/backend/Dockerfile`. Frontend: Verce
 
 ## Note
 Medicine data is synthetic. This is decision support; a pharmacist makes the final call.
+The demand-scaled generator seeds new databases only. Existing database contents are preserved and are not automatically replaced.
 
 ## Run everything with Docker (PostgreSQL + API + UI)
 `docker compose -f pharmaopt/docker-compose.yml up --build`, then open http://localhost:8080 (API docs at http://localhost:8000/docs).
 
 ## Invoice-to-inventory
-Paste text or upload a photo of a supplier invoice. OCR (Tesseract) is used for images. Lines look like `Paracetamol 500mg  B123  500  2027-03-31`. Matched lines are shown for the pharmacist to verify before they are added to stock.
+Paste invoice lines or upload a photo. OCR (Tesseract) is used for images. Lines look like `Paracetamol 500mg  B123  500  2027-03-31`; tab- and pipe-separated columns are also accepted. Expiry formats are `YYYY-MM-DD`, `DD/MM/YYYY`, and `MM/YYYY`. Impossible dates and nonpositive quantities are rejected and shown for correction; matched lines still require pharmacist review before addition.
 
 ## Benchmark
-`cd pharmaopt/backend && python benchmark.py` compares PharmaOpt with a reorder-point rule on 50 synthetic pharmacies. Latest results: [docs/benchmark.md](docs/benchmark.md).
+`cd pharmaopt/backend && python benchmark.py` regenerates [docs/benchmark.md](docs/benchmark.md). It compares PharmaOpt with reorder-point and order-up-to-30-day baselines across held-out stochastic demand, with confidence intervals. The data is synthetic, so results do not establish real-world impact.
 
 ## Deploy (free tiers)
 1. **Database + API on Render:** create a PostgreSQL instance, then a Docker Web Service with root directory `pharmaopt/backend`. Set `DATABASE_URL` to the database's internal URL.
